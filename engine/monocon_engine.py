@@ -18,6 +18,9 @@ from solver import CyclicScheduler
 from utils.visualizer import Visualizer
 from utils.decorators import decorator_timer
 from utils.engine_utils import progress_to_string_bar, move_data_device, reduce_loss_dict, tprint
+from utils.kitti_convert_utils import kitti_3d_to_file
+
+from torch_lr_finder import LRFinder
 
 
 class MonoconEngine(BaseEngine):
@@ -45,12 +48,13 @@ class MonoconEngine(BaseEngine):
         scheduler = None
         if self.cfg.SOLVER.SCHEDULER.ENABLE:
             total_steps = (len(self.train_loader) * self.cfg.SOLVER.OPTIM.NUM_EPOCHS)
-            scheduler = CyclicScheduler(
-                optimizer,
-                total_steps=total_steps,
-                target_lr_ratio=(10, 1E-04),
-                target_momentum_ratio=(0.85 / 0.95, 1.0),
-                period_up=0.4)
+            # scheduler = CyclicScheduler(
+            #     optimizer,
+            #     total_steps=total_steps,
+            #     target_lr_ratio=(0.00085, 1E-04),
+            #     target_momentum_ratio=(0.85 / 0.95, 1.0),
+            #     period_up=0.4)
+            scheduler = torch.optim.lr_scheduler.OneCycleLR(optimizer, max_lr=0.00085, steps_per_epoch=len(self.train_loader) , epochs=self.cfg.SOLVER.OPTIM.NUM_EPOCHS)
             
         return optimizer, scheduler
     
@@ -71,7 +75,59 @@ class MonoconEngine(BaseEngine):
             drop_last=False)
         return dataset, loader
 
+           
+        
+    @decorator_timer
+    def lr_find(self) -> float:
+        epoch_losses = []
+        epoch_lr = []
+        self.optimizer = optim.AdamW(
+            params=self.model.parameters(),
+            lr=1e-6,
+            weight_decay=self.cfg.SOLVER.OPTIM.WEIGHT_DECAY,
+            betas=(0.95, 0.99))
+        self.scheduler = torch.optim.lr_scheduler.ExponentialLR(self.optimizer, gamma=1.065)
+        for batch_idx, data_dict in enumerate(self.train_loader):
+            self.optimizer.zero_grad()
+            epoch_lr.append(self.current_lr)
+            # Forward
+            data_dict = move_data_device(data_dict, self.current_device)
+            _, loss_dict = self.model(data_dict)
+            total_loss = reduce_loss_dict(loss_dict)
+            total_loss.backward()
+            
+            # Save Losses
+            step_loss = total_loss.detach().item()
+            epoch_losses.append(step_loss)
+            self.entire_losses.append(step_loss)
+            
+            # Clip Gradient (Option)
+            if self.cfg.SOLVER.CLIP_GRAD.ENABLE:
+                clip_args = {k.lower(): v for k, v in dict(self.cfg.SOLVER.CLIP_GRAD).items()
+                             if k not in ['ENABLE']}
+                clip_grad_norm_(self.model.parameters(), **clip_args)
+            
+            # Step
+            self.optimizer.step()
+            if (self.scheduler is not None):
+                self.scheduler.step()
+            
+            # Update and Log
+            if (self.global_iters % self.log_period == 0):
+                one_epoch_steps = len(self.train_loader)
+                prog_bar = progress_to_string_bar((batch_idx + 1), one_epoch_steps, bins=20)
+                recent_loss = sum(self.entire_losses[-100:]) / len(self.entire_losses[-100:])
+                print(f"| Progress {prog_bar} | LR {self.current_lr:.6f} | Loss {total_loss.item():8.4f} ({recent_loss:8.4f}) |")
+                
+                self._update_dict_to_writer(loss_dict, tag='loss')
+                
+            self._iter_update()
+        self._epoch_update()
 
+        # Return Average Loss
+        # epoch_loss = (sum(epoch_losses) / len(epoch_losses))
+        return epoch_losses,epoch_lr
+    
     @decorator_timer
     def train_one_epoch(self) -> float:
         epoch_losses = []
@@ -117,7 +173,6 @@ class MonoconEngine(BaseEngine):
         epoch_loss = (sum(epoch_losses) / len(epoch_losses))
         return epoch_loss
     
-    
     @torch.no_grad()
     def evaluate(self) -> Dict[str, float]:
         
@@ -146,7 +201,47 @@ class MonoconEngine(BaseEngine):
             self.model.train()
             tprint("Model is converted to train mode.")
         return eval_dict
-
+    
+    
+    @torch.no_grad()
+    def evaluate_test(self,get_metrics=True,save_dir = None, single_file = True) -> Dict[str, float]:
+        
+        cvt_flag = False
+        if self.model.training:
+            self.model.eval()
+            cvt_flag = True
+            tprint("Model is converted to eval mode.")
+        
+        if get_metrics:
+            tprint("Model is converted to eval Mode")
+        if save_dir is not None:
+            tprint(f"Inference results will be saved to '{save_dir}', single_file :{single_file}")
+            
+        eval_container = {
+            'img_bbox': [],
+            'img_bbox2d': []}
+        
+        for test_data in tqdm(self.test_loader, desc="Collecting Results..."):
+            test_data = move_data_device(test_data, self.current_device)
+            eval_results = self.model.batch_eval(test_data)
+            
+            if save_dir is not None:
+                kitti_3d_to_file(eval_results,test_data['img_metas'],save_dir,single_file)
+            
+            if get_metrics:
+                for field in ['img_bbox', 'img_bbox2d']:
+                    eval_container[field].extend(eval_results[field])
+        if get_metrics:
+            eval_dict = self.test_dataset.evaluate(eval_container,
+                                               eval_classes=['Pedestrian', 'Cyclist', 'Car'],
+                                               verbose=True)
+        
+        if cvt_flag:
+            self.model.train()
+            tprint("Model is converted to train mode.")
+        if get_metrics:
+            return eval_dict
+        return None
     
     @torch.no_grad()
     def visualize(self, 

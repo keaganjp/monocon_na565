@@ -38,7 +38,11 @@ tprint(f"Using Random Seed {seed}")
 
 # Initialize Engine
 engine = MonoconEngine(cfg)
+engine.load_checkpoint("pretrained_weights/best.pth", verbose=True)
 
+
+engine.epochs=1
+engine.target_epochs = cfg.SOLVER.OPTIM.NUM_EPOCHS
 
 # Start Training from Scratch
 # Output files will be saved to 'cfg.OUTPUT_DIR'.

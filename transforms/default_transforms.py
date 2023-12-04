@@ -478,3 +478,23 @@ class Convert_3D_to_4D(BaseTransform):
         data_dict['calib'] = [data_dict['calib']]
                     
         return data_dict
+import torchvision
+extra_transforms = torchvision.transforms.GaussianBlur(5,(0.5,2))
+
+class Gaussian_Blur(BaseTransform):
+    def __init__(self, kernel_size,sigma):
+        
+        super().__init__(True, False, False, False)
+    
+        self.kernel_size = kernel_size
+        self.sigma = sigma
+
+    def __call__(self, data_dict: Dict[str, Any]) -> Dict[str, Any]:
+        
+        # Convert image to tensor
+        if 'img' in data_dict.keys():
+            data_dict['img'] = extra_transforms(img)
+        return data_dict
+
+
+

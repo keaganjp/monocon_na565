@@ -1,0 +1,9 @@
+python test_inf.py --config_file exps/config.yaml --checkpoint_file exps/checkpoints/epoch_200_final.pth --text_dir exps/test/merged_test_normal.txt --inference_only --single_file --test_split --evaluate
+
+python test_inf.py  --inference_only --single_file --extra_split --evaluate --config_file exps_pre/config.yaml --checkpoint_file exps_pre/checkpoints/epoch_200_final.pth --text_dir exps_pre/test/merged_test_bonus.txt
+
+python test_inf.py  --inference_only --single_file --extra_split --evaluate --config_file exps_pre2/config.yaml --checkpoint_file exps_pre2/checkpoints/epoch_050_final.pth --text_dir exps_pre2/test/merged_test_bonus.txt
+
+python train.py 2>&1 | tee output.txt
+
+

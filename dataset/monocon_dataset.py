@@ -3,8 +3,9 @@ import sys
 import torch
 import numpy as np
 import cv2
-
+import torchvision
 from typing import List, Dict, Any
+import albumentations as A
 
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 
@@ -33,7 +34,19 @@ default_train_transforms = [
     Normalize(mean=[123.675, 116.28, 103.53], std=[58.395, 57.12, 57.375]),
     Pad(size_divisor=32),
     ToTensor(),
+
+    
 ]
+
+
+
+alb_transforms = A.Compose([
+         A.RandomFog(fog_coef_lower=0.1, fog_coef_upper=0.2, alpha_coef=0.2, p=0.3),
+     A.GlassBlur(sigma=0.1, max_delta=1, iterations=1,p=0.3)
+],
+)
+
+
 
 
 default_test_transforms = [
@@ -79,7 +92,7 @@ class MonoConDataset(BaseKITTIMono3DDataset):
         image, img_metas = self.load_image(idx)
         calib = self.load_calib(idx)
         
-        if self.split == 'test':
+        if self.split == 'test' or self.split =="test_extra":
             result_dict = {
                 'img': image,
                 'img_metas': img_metas,
@@ -159,7 +172,7 @@ class MonoConDataset(BaseKITTIMono3DDataset):
             new_labels['mask'][obj_idx] = True
         
         result_dict = {
-            'img': image,
+            'img': alb_transforms(image =image)["image"],
             'img_metas': img_metas,
             'calib': calib,
             'label': new_labels}

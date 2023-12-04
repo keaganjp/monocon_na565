@@ -28,14 +28,14 @@ class BaseKITTIMono3DDataset(Dataset):
         assert os.path.isdir(base_root)
         self.base_root = base_root
         
-        assert split in ['train', 'val', 'trainval', 'test']
+        assert split in ['train', 'val', 'trainval', 'test','test_extra']
         self.split = split
         
         with open(os.path.join(IMAGESET_DIR, f'{split}.txt')) as f:
             file_prefix = f.readlines()
         self.file_prefix = [fp.replace('\n', '') for fp in file_prefix]
         
-        sub_root = 'testing' if (split == 'test') else 'training'
+        sub_root = 'testing' if (split == 'test' or split =="test_extra") else 'training'
         
         # Image Files
         self.image_dir = os.path.join(base_root, sub_root, 'image_2')
@@ -51,7 +51,7 @@ class BaseKITTIMono3DDataset(Dataset):
         
         # Label Files
         self.label_dir, self.label_files = None, []
-        if (split != 'test'):
+        if (split != 'test' and split !='test_extra'):
             self.label_dir = os.path.join(base_root, sub_root, 'label_2')
             self.label_files = [os.path.join(self.label_dir, f'{fp}.txt') for fp in self.file_prefix]
         

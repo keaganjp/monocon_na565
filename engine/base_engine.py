@@ -92,8 +92,9 @@ class BaseEngine:
         
     def train(self, resume_from: str = None) -> None:
         assert torch.cuda.is_available(), "CUDA is not available."
+        
         assert (self.epochs < self.target_epochs), \
-            "Argument 'target_epochs' must be equal to or greater than 'epochs'."
+            f"Argument '{self.target_epochs}' must be equal to or greater than '{self.epochs}'."
             
         # Print Info
         self._print_engine_info()
@@ -192,13 +193,14 @@ class BaseEngine:
                         ckpt_file: str, 
                         verbose: bool = False) -> None:
         
-        engine_dict = torch.load(ckpt_file)
+        engine_dict = torch.load(ckpt_file,map_location=torch.device('cuda:0'))
         
         
         # Load Engine Attributes
         attrs = engine_dict['engine_attrs']
-        for attr_k, attr_v in attrs.items():
-            setattr(self, attr_k, attr_v)
+        # for attr_k, attr_v in attrs.items():
+        #     print(attr_k,attr_v)
+        #     setattr(self, attr_k, attr_v)
         
             
         state_dict = engine_dict['state_dict']
@@ -207,13 +209,13 @@ class BaseEngine:
         if (state_dict['model'] is not None) and (self.model is not None):
             self.model.load_state_dict(state_dict['model'])
         
-        # Load Optimizer
-        if (state_dict['optimizer'] is not None) and (self.optimizer is not None):
-            self.optimizer.load_state_dict(state_dict['optimizer'])
+#         # Load Optimizer
+#         if (state_dict['optimizer'] is not None) and (self.optimizer is not None):
+#             self.optimizer.load_state_dict(state_dict['optimizer'])
         
-        # Load Scheduler
-        if (state_dict['scheduler'] is not None) and (self.scheduler is not None):
-            self.scheduler.load_state_dict(state_dict['scheduler'])
+#         # Load Scheduler
+#         if (state_dict['scheduler'] is not None) and (self.scheduler is not None):
+#             self.scheduler.load_state_dict(state_dict['scheduler'])
         
         if verbose:
             tprint(f"Checkpoint is loaded from '{ckpt_file}'.")

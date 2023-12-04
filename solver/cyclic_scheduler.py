@@ -9,7 +9,7 @@ class CyclicScheduler(_LRScheduler):
     def __init__(self,
                  optimizer: Optimizer,
                  total_steps: int,
-                 target_lr_ratio: Tuple[int, int] = (10, 1e-4),
+                 target_lr_ratio: Tuple[int, int] = (0.00085, 1e-4),
                  target_momentum_ratio: Tuple[float, float] = (0.85 / 0.95, 1.),
                  period_up: float = 0.4):
         
